@@ -8,6 +8,7 @@ SET (octomap_SRCS
   OcTreeNode.cpp
   OcTreeStamped.cpp
   ColorOcTree.cpp
+  DoseOcTree.cpp # trunc8 added
   )
 
 # dynamic and static libs, see CMake FAQ:
@@ -66,6 +67,14 @@ TARGET_LINK_LIBRARIES(intersection_example octomap)
 
 ADD_EXECUTABLE(octree2pointcloud octree2pointcloud.cpp)
 TARGET_LINK_LIBRARIES(octree2pointcloud octomap)
+
+# trunc8 added this executable
+ADD_EXECUTABLE(dose_octree_example dose_octree_example.cpp)
+TARGET_LINK_LIBRARIES(dose_octree_example octomap)
+
+ADD_EXECUTABLE(color_octree_example color_octree_example.cpp)
+TARGET_LINK_LIBRARIES(color_octree_example octomap)
+# and this target library.
 
 install(TARGETS octomap octomap-static
   EXPORT octomap-targets
