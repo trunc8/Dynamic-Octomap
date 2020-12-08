@@ -72,6 +72,10 @@
 #include <octomap/ColorOcTree.h>
 #endif
 
+#ifdef DOSE_OCTOMAP_SERVER
+#include <octomap/DoseOcTree.h>
+#endif
+
 namespace octomap_server {
 class OctomapServer {
 
@@ -80,6 +84,10 @@ public:
   typedef pcl::PointXYZRGB PCLPoint;
   typedef pcl::PointCloud<pcl::PointXYZRGB> PCLPointCloud;
   typedef octomap::ColorOcTree OcTreeT;
+#elif DOSE_OCTOMAP_SERVER
+  typedef pcl::PointXYZ PCLPoint;
+  typedef pcl::PointCloud<pcl::PointXYZ> PCLPointCloud;
+  typedef octomap::DoseOcTree OcTreeT;
 #else
   typedef pcl::PointXYZ PCLPoint;
   typedef pcl::PointCloud<pcl::PointXYZ> PCLPointCloud;
@@ -198,6 +206,7 @@ protected:
   }
 
   static std_msgs::ColorRGBA heightMapColor(double h);
+  static std_msgs::ColorRGBA intensityMapColor(double val);
   ros::NodeHandle m_nh;
   ros::NodeHandle m_nh_private;
   ros::Publisher  m_markerPub, m_binaryMapPub, m_fullMapPub, m_pointCloudPub, m_collisionObjectPub, m_mapPub, m_cmapPub, m_fmapPub, m_fmarkerPub;
@@ -258,6 +267,8 @@ protected:
   unsigned m_multires2DScale;
   bool m_projectCompleteMap;
   bool m_useColoredMap;
+
+/// Need a max_level_of_dose_so_far variable (maybe or maybe not)
 };
 }
 

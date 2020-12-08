@@ -47,7 +47,7 @@ OctomapServer::OctomapServer(const ros::NodeHandle private_nh_, const ros::NodeH
   m_reconfigureServer(m_config_mutex, private_nh_),
   m_octree(NULL),
   m_maxRange(-1.0),
-  m_worldFrameId("/map"), m_baseFrameId("base_footprint"),
+  m_worldFrameId("/map"),m_baseFrameId("base_footprint"),
   m_useHeightMap(true),
   m_useColoredMap(false),
   m_colorFactor(0.8),
@@ -123,13 +123,22 @@ OctomapServer::OctomapServer(const ros::NodeHandle private_nh_, const ros::NodeH
   if (m_useColoredMap) {
 #ifdef COLOR_OCTOMAP_SERVER
     ROS_INFO_STREAM("Using RGB color registration (if information available)");
+#elif DOSE_OCTOMAP_SERVER
+    ROS_INFO_STREAM("Using dose intenstity color (if information available)");
 #else
     ROS_ERROR_STREAM("Colored map requested in launch file - node not running/compiled to support colors, please define COLOR_OCTOMAP_SERVER and recompile or launch the octomap_color_server node");
 #endif
   }
 
   // initialize octomap object & params
+
   m_octree = new OcTreeT(m_res);
+
+  ROS_WARN_STREAM(m_octree->getTreeType());
+#ifdef DOSE_OCTOMAP_SERVER
+  m_octree->setNodeDose(1,1,1,1);
+#endif
+
   m_octree->setProbHit(probHit);
   m_octree->setProbMiss(probMiss);
   m_octree->setClampingThresMin(thresMin);
@@ -410,6 +419,15 @@ void OctomapServer::insertScan(const tf::Point& sensorOriginTf, const PCLPointCl
 #ifdef COLOR_OCTOMAP_SERVER // NB: Only read and interpret color if it's an occupied node
         m_octree->averageNodeColor(it->x, it->y, it->z, /*r=*/it->r, /*g=*/it->g, /*b=*/it->b);
 #endif
+
+#ifdef DOSE_OCTOMAP_SERVER // NB: Only read and interpret dose if it's an occupied node
+/// Is 6D pose of the sensor origin needed? "sensorOrigin" is of type Point3D
+        float euclidean_distance = (point - sensorOrigin).norm();
+        // ROS_WARN_STREAM("Updated");
+
+        float dose_received_by_xyz = 10.0f*exp(-euclidean_distance);
+        m_octree->incrementNodeDose(it->x, it->y, it->z, dose_received_by_xyz);
+#endif
       }
     } else {// ray longer than maxrange:;
       point3d new_end = sensorOrigin + (point - sensorOrigin).normalized() * m_maxRange;
@@ -540,6 +558,10 @@ void OctomapServer::publishAll(const ros::Time& rostime){
         int b = it->getColor().b;
 #endif
 
+#ifdef DOSE_OCTOMAP_SERVER
+        float dose = it->getDose();
+#endif
+
         // Ignore speckles in the map:
         if (m_filterSpeckles && (it.getDepth() == m_treeDepth +1) && isSpeckleNode(it.getKey())){
           ROS_DEBUG("Ignoring single speckle at (%f,%f,%f)", x, y, z);
@@ -575,6 +597,12 @@ void OctomapServer::publishAll(const ros::Time& rostime){
           if (m_useColoredMap) {
             std_msgs::ColorRGBA _color; _color.r = (r / 255.); _color.g = (g / 255.); _color.b = (b / 255.); _color.a = 1.0; // TODO/EVALUATE: potentially use occupancy as measure for alpha channel?
             occupiedNodesVis.markers[idx].colors.push_back(_color);
+          }
+#endif
+#ifdef DOSE_OCTOMAP_SERVER
+          if (m_useColoredMap) {
+            double val = (1.0 - std::min(std::max(dose/ 1000.0, 0.0), 1.0)) *2;
+            occupiedNodesVis.markers[idx].colors.push_back(intensityMapColor(val));
           }
 #endif
         }
@@ -1225,6 +1253,24 @@ void OctomapServer::adjustMapData(nav_msgs::OccupancyGrid& map, const nav_msgs::
 
 }
 
+std_msgs::ColorRGBA OctomapServer::intensityMapColor(double val) {
+
+  std_msgs::ColorRGBA color;
+  color.a = 1.0;
+  // https://stackoverflow.com/a/20793850/7589046
+
+  double r[] = {255, 0, 0};
+  double g[] = {0, 255, 0};
+  double b[] = {0, 0, 255};
+  int i = floor(val);
+  double f = val - i;
+
+  color.r = (r[i] + f*(r[i+1] - r[i]))/255;
+  color.g = (g[i] + f*(g[i+1] - g[i]))/255;
+  color.b = (b[i] + f*(b[i+1] - b[i]))/255;
+
+  return color;
+}
 
 std_msgs::ColorRGBA OctomapServer::heightMapColor(double h) {
 

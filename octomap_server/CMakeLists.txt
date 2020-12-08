@@ -51,11 +51,23 @@ target_link_libraries(${PROJECT_NAME}_color ${LINK_LIBS})
 add_dependencies(${PROJECT_NAME}_color ${PROJECT_NAME}_gencfg)
 target_compile_definitions(${PROJECT_NAME}_color PUBLIC COLOR_OCTOMAP_SERVER)
 
+# trunc8 added this library
+add_library(${PROJECT_NAME}_dose src/OctomapServer.cpp src/OctomapServerMultilayer.cpp src/TrackingOctomapServer.cpp)
+target_link_libraries(${PROJECT_NAME}_dose ${LINK_LIBS})
+add_dependencies(${PROJECT_NAME}_dose ${PROJECT_NAME}_gencfg)
+target_compile_definitions(${PROJECT_NAME}_dose PUBLIC DOSE_OCTOMAP_SERVER)
+# and this target compile definition
+
 add_executable(octomap_server_node src/octomap_server_node.cpp)
 target_link_libraries(octomap_server_node ${PROJECT_NAME} ${LINK_LIBS})
 
 add_executable(octomap_color_server_node src/octomap_server_node.cpp)
 target_link_libraries(octomap_color_server_node ${PROJECT_NAME}_color ${LINK_LIBS})
+
+# trunc8 added this executable
+add_executable(octomap_dose_server_node src/octomap_server_node.cpp)
+target_link_libraries(octomap_dose_server_node ${PROJECT_NAME}_dose ${LINK_LIBS})
+# and this target link library
 
 add_executable(octomap_server_static src/octomap_server_static.cpp)
 target_link_libraries(octomap_server_static ${PROJECT_NAME} ${LINK_LIBS})
@@ -77,9 +89,10 @@ add_library(octomap_color_server_nodelet src/octomap_server_nodelet.cpp)
 target_link_libraries(octomap_color_server_nodelet ${PROJECT_NAME}_color ${LINK_LIBS})
 
 # install targets:
-install(TARGETS ${PROJECT_NAME} ${PROJECT_NAME}_color
+install(TARGETS ${PROJECT_NAME} ${PROJECT_NAME}_color ${PROJECT_NAME}_dose # trunc8
   octomap_server_node
   octomap_color_server_node
+  octomap_dose_server_node # trunc8 added this
   octomap_server_static
   octomap_server_multilayer
   octomap_saver
