@@ -9,6 +9,7 @@ SET (octomap_SRCS
   OcTreeStamped.cpp
   ColorOcTree.cpp
   DoseOcTree.cpp # trunc8 added
+  DynamicOcTree.cpp # trunc8 added
   )
 
 # dynamic and static libs, see CMake FAQ:
