@@ -47,4 +47,8 @@ roslaunch demonstrations deduct_dynamic_demo.launch
 * [octomap Library](https://github.com/OctoMap/octomap)
 * [octomap_mapping ROS Package](https://github.com/OctoMap/octomap_mapping)
 
+### Acknowledgement
+
+* Prof. Leena Vacchani
+
 <p align='center'>Created with :heart: by <a href="https://www.linkedin.com/in/sahasiddharth611/">Siddharth</a></p>
