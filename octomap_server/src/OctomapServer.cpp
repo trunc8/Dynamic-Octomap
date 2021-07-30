@@ -181,6 +181,10 @@ OctomapServer::OctomapServer(const ros::NodeHandle private_nh_, const ros::NodeH
   m_mapPub = m_nh.advertise<nav_msgs::OccupancyGrid>("projected_map", 5, m_latchedTopics);
   m_fmarkerPub = m_nh.advertise<visualization_msgs::MarkerArray>("free_cells_vis_array", 1, m_latchedTopics);
 
+#ifdef DYNAMIC_OCTOMAP_SERVER
+  m_dmarkerPub = m_nh.advertise<visualization_msgs::MarkerArray>("dynamic_cells_vis_array", 1, m_latchedTopics);
+#endif
+
   m_pointCloudSub = new message_filters::Subscriber<sensor_msgs::PointCloud2> (m_nh, "cloud_in", 5);
   m_tfPointCloudSub = new tf::MessageFilter<sensor_msgs::PointCloud2> (*m_pointCloudSub, m_tfListener, m_worldFrameId, 5);
   m_tfPointCloudSub->registerCallback(boost::bind(&OctomapServer::insertCloudCallback, this, _1));
@@ -425,7 +429,8 @@ void OctomapServer::insertScan(const tf::Point& sensorOriginTf, const PCLPointCl
         float euclidean_distance = (point - sensorOrigin).norm();
         // ROS_WARN_STREAM("Updated");
 
-        float dose_received_by_xyz = 10.0f*exp(-euclidean_distance);
+        // float dose_received_by_xyz = 10.0f*exp(-euclidean_distance);
+        float dose_received_by_xyz = 0.1f;
         m_octree->incrementNodeDose(it->x, it->y, it->z, dose_received_by_xyz);
 #endif
       }
@@ -447,6 +452,108 @@ void OctomapServer::insertScan(const tf::Point& sensorOriginTf, const PCLPointCl
       }
     }
   }
+
+#ifdef DYNAMIC_OCTOMAP_SERVER
+  double thresMin = m_octree->getClampingThresMin();
+  double thresMax = m_octree->getClampingThresMax();
+
+  for(OcTreeT::leaf_iterator it = m_octree->begin_leafs(),
+       end=m_octree->end_leafs(); it!= end; ++it)
+  {
+    double dynamicity = it->getDynamicity();
+    if (dynamicity==1) {
+      it->setLogOdds(octomap::logodds(thresMin));
+      // ROS_WARN_STREAM("Set logodds to free\n");
+    }
+  }
+
+  for(KeySet::iterator it = free_cells.begin(), end=free_cells.end(); it!= end; ++it){
+    // if (occupied_cells.find(*it) == occupied_cells.end()){
+    //   m_octree->checkNodeDynamicity(*it, false);
+    // }
+    octomap::DynamicOcTreeNode* n = m_octree->search(*it, m_maxTreeDepth);
+    point3d coord = m_octree->keyToCoord(*it);
+    // ROS_ERROR_STREAM(coord.z() << " Z value\n");
+    // Ground filter set at height z=0.04
+    if (coord.z() <= 0.04)
+      continue;
+    if ( m_octree->search(*it, m_maxTreeDepth) ){
+      double logodds = (m_octree->search(*it, m_maxTreeDepth))->getLogOdds();
+      double probability = octomap::probability(logodds);
+      double dynamicity = m_octree->getNodeDynamicity(*it);
+      if (dynamicity==1) {
+        n->setLogOdds(octomap::logodds(thresMin));
+        continue;
+      }
+      // if the node has been clamped as occupied
+      if (occupied_cells.find(*it) == occupied_cells.end() and probability == thresMax){
+        // double dynamicity = m_octree->getNodeDynamicity(*it);
+        // ROS_ERROR_STREAM(probability << " Occupied measured free!\n");
+        // m_octree->setNodeDynamicity(*it, 1);
+        // m_octree->incrementNodeDynamicity(*it, 0.5);
+        // ROS_WARN_STREAM(m_octree->getNodeDynamicity(*it) << " = Dynamicity");
+        if (dynamicity==0) {
+          m_octree->incrementNodeDynamicity(*it, 0.5);
+        }
+        else if (dynamicity!=1) {
+          // m_octree->setNodeDynamicity(*it, 1);
+          // Check if it's a speckle node
+          if (!isDynamicallySpeckleNode(*it)) {
+            // The node graduates to be recognized as fully dynamic
+            // We can mark corresponding node as free
+            // in dynamic_deducted_octomap
+            m_octree->setNodeDynamicity(*it, 1);
+            // ROS_ERROR_STREAM("Occupied cell is dynamic!");
+          }
+          else {
+            ROS_WARN_STREAM(m_octree->getNodeDynamicity(*it) << " = Occ Dynamicity");
+          }
+        }
+      }
+    }
+  }
+  for (KeySet::iterator it = occupied_cells.begin(), end=occupied_cells.end(); it!= end; it++) {
+    octomap::DynamicOcTreeNode* n = m_octree->search(*it, m_maxTreeDepth);
+    point3d coord = m_octree->keyToCoord(*it);
+    // ROS_ERROR_STREAM(coord.z() << " Z value\n");
+    // Ground filter set at height z=0.04
+    if (coord.z() <= 0.04)
+      continue;
+    if ( m_octree->search(*it, m_maxTreeDepth) ){
+      double logodds = (m_octree->search(*it, m_maxTreeDepth))->getLogOdds();
+      double probability = octomap::probability(logodds);
+      double dynamicity = m_octree->getNodeDynamicity(*it);
+      if (dynamicity==1) {
+        n->setLogOdds(octomap::logodds(thresMin));
+        continue;
+      }
+      // if the node has been clamped as free
+      if (probability == thresMin){
+        // ROS_ERROR_STREAM(probability << " Free measured occupied!\n");
+        // m_octree->setNodeDynamicity(*it, 1);
+        // ROS_ERROR_STREAM(m_octree->getNodeDynamicity(*it) << " = Dynamicity");
+        // double dynamicity = m_octree->getNodeDynamicity(*it);
+        if (dynamicity==0) {
+          m_octree->incrementNodeDynamicity(*it, 0.5);
+        }
+        else if (dynamicity!=1) {
+          // m_octree->setNodeDynamicity(*it, 1);
+          // Check if it's a speckle node
+          if (!isDynamicallySpeckleNode(*it)) {
+            // The node graduates to be recognized as fully dynamic
+            // We can mark corresponding node as free
+            // in dynamic_deducted_octomap
+            m_octree->setNodeDynamicity(*it, 1);
+            // ROS_ERROR_STREAM("Free cell is dynamic!");
+          }
+          else {
+            ROS_WARN_STREAM(m_octree->getNodeDynamicity(*it) << " = Free Dynamicity");
+          }
+        }
+      }
+    }
+  }
+#endif
 
   // mark free cells only if not seen occupied in this cloud
   for(KeySet::iterator it = free_cells.begin(), end=free_cells.end(); it!= end; ++it){
@@ -527,6 +634,13 @@ void OctomapServer::publishAll(const ros::Time& rostime){
   // each array stores all cubes of a different size, one for each depth level:
   occupiedNodesVis.markers.resize(m_treeDepth+1);
 
+#ifdef DYNAMIC_OCTOMAP_SERVER
+  // init markers: dynamic nodes
+  visualization_msgs::MarkerArray dynamicNodesVis;
+  // each array stores all cubes of a different size, one for each depth level:
+  dynamicNodesVis.markers.resize(m_treeDepth+1);
+#endif
+
   // init pointcloud:
   pcl::PointCloud<PCLPoint> pclCloud;
 
@@ -543,6 +657,25 @@ void OctomapServer::publishAll(const ros::Time& rostime){
     handleNode(it);
     if (inUpdateBBX)
       handleNodeInBBX(it);
+
+#ifdef DYNAMIC_OCTOMAP_SERVER
+    // create marker
+    // double dynamicity = 1;//it.getDynamicity();
+    double x = it.getX();
+    double y = it.getY();
+    double z = it.getZ();
+    double dynamicity = m_octree->getNodeDynamicity(x,y,z);
+    if (dynamicity == 1) {      
+      unsigned idx = it.getDepth();
+      assert(idx < occupiedNodesVis.markers.size());
+      geometry_msgs::Point cubeCenter;
+      cubeCenter.x = x;
+      cubeCenter.y = y;
+      cubeCenter.z = z;
+
+      dynamicNodesVis.markers[idx].points.push_back(cubeCenter);
+    }
+#endif
 
     if (m_octree->isNodeOccupied(*it)){
       double z = it.getZ();
@@ -653,6 +786,34 @@ void OctomapServer::publishAll(const ros::Time& rostime){
 
   // call post-traversal hook:
   handlePostNodeTraversal(rostime);
+
+
+#ifdef DYNAMIC_OCTOMAP_SERVER
+  // finish DynamicMarkerArray:  
+  for (unsigned i= 0; i < dynamicNodesVis.markers.size(); ++i){
+    double size = m_octree->getNodeSize(i);
+
+    dynamicNodesVis.markers[i].header.frame_id = m_worldFrameId;
+    dynamicNodesVis.markers[i].header.stamp = rostime;
+    dynamicNodesVis.markers[i].ns = "map";
+    dynamicNodesVis.markers[i].id = i;
+    dynamicNodesVis.markers[i].type = visualization_msgs::Marker::CUBE_LIST;
+    dynamicNodesVis.markers[i].scale.x = size;
+    dynamicNodesVis.markers[i].scale.y = size;
+    dynamicNodesVis.markers[i].scale.z = size;
+    if (!m_useColoredMap)
+      dynamicNodesVis.markers[i].color = m_color;
+
+
+    if (dynamicNodesVis.markers[i].points.size() > 0)
+      dynamicNodesVis.markers[i].action = visualization_msgs::Marker::ADD;
+    else
+      dynamicNodesVis.markers[i].action = visualization_msgs::Marker::DELETE;
+  }
+
+  m_dmarkerPub.publish(dynamicNodesVis);
+#endif
+
 
   // finish MarkerArray:
   if (publishMarkerArray){
@@ -1154,6 +1315,29 @@ bool OctomapServer::isSpeckleNode(const OcTreeKey&nKey) const {
 
   return neighborFound;
 }
+
+#ifdef DYNAMIC_OCTOMAP_SERVER
+bool OctomapServer::isDynamicallySpeckleNode(const OcTreeKey&nKey) const {
+  OcTreeKey key;
+  bool neighborFound = false;
+  for (key[2] = nKey[2] - 1; !neighborFound && key[2] <= nKey[2] + 1; ++key[2]){
+    for (key[1] = nKey[1] - 1; !neighborFound && key[1] <= nKey[1] + 1; ++key[1]){
+      for (key[0] = nKey[0] - 1; !neighborFound && key[0] <= nKey[0] + 1; ++key[0]){
+        if (key != nKey){
+          OcTreeNode* node = m_octree->search(key);
+          if (node && (m_octree->getNodeDynamicity(key)>=0.5)){
+            // we have a neighbor => break!
+            neighborFound = true;
+            break;
+          }
+        }
+      }
+    }
+  }
+
+  return !neighborFound;
+}
+#endif
 
 void OctomapServer::reconfigureCallback(octomap_server::OctomapServerConfig& config, uint32_t level){
   if (m_maxTreeDepth != unsigned(config.max_depth))

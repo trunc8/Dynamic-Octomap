@@ -76,6 +76,10 @@
 #include <octomap/DoseOcTree.h>
 #endif
 
+#ifdef DYNAMIC_OCTOMAP_SERVER
+#include <octomap/DynamicOcTree.h>
+#endif
+
 namespace octomap_server {
 class OctomapServer {
 
@@ -88,6 +92,10 @@ public:
   typedef pcl::PointXYZ PCLPoint;
   typedef pcl::PointCloud<pcl::PointXYZ> PCLPointCloud;
   typedef octomap::DoseOcTree OcTreeT;
+#elif DYNAMIC_OCTOMAP_SERVER
+  typedef pcl::PointXYZ PCLPoint;
+  typedef pcl::PointCloud<pcl::PointXYZ> PCLPointCloud;
+  typedef octomap::DynamicOcTree OcTreeT;
 #else
   typedef pcl::PointXYZ PCLPoint;
   typedef pcl::PointCloud<pcl::PointXYZ> PCLPointCloud;
@@ -153,6 +161,15 @@ protected:
   */
   bool isSpeckleNode(const octomap::OcTreeKey& key) const;
 
+  /**
+  * @brief Find dynamically speckle nodes (single dynamic voxels with no neighbors). Only works on lowest resolution!
+  * @param key
+  * @return
+  */
+#ifdef DYNAMIC_OCTOMAP_SERVER
+  bool isDynamicallySpeckleNode(const octomap::OcTreeKey& key) const;
+#endif
+
   /// hook that is called before traversing all nodes
   virtual void handlePreNodeTraversal(const ros::Time& rostime);
 
@@ -210,6 +227,11 @@ protected:
   ros::NodeHandle m_nh;
   ros::NodeHandle m_nh_private;
   ros::Publisher  m_markerPub, m_binaryMapPub, m_fullMapPub, m_pointCloudPub, m_collisionObjectPub, m_mapPub, m_cmapPub, m_fmapPub, m_fmarkerPub;
+
+#ifdef DYNAMIC_OCTOMAP_SERVER
+  ros::Publisher  m_dmarkerPub;
+#endif
+
   message_filters::Subscriber<sensor_msgs::PointCloud2>* m_pointCloudSub;
   tf::MessageFilter<sensor_msgs::PointCloud2>* m_tfPointCloudSub;
   ros::ServiceServer m_octomapBinaryService, m_octomapFullService, m_clearBBXService, m_resetService;
