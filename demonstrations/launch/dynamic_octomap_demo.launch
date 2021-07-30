@@ -1,0 +1,32 @@
+<?xml version="1.0" ?>
+<launch>
+
+  <!-- Turtlebot3 gazebo environment -->
+  <!-- <include file="$(find turtlebot3_gazebo)/launch/turtlebot3_world.launch">
+    <arg name="gui" value="true"/>
+  </include> -->
+
+  <include file="$(find gazebo_ros)/launch/empty_world.launch">
+    <arg name="world_name" value="$(find demonstrations)/worlds/dynamic_test.world"/>
+  </include>
+
+  <!-- Turtlebot3 transform between frames -->
+  <include file="$(find turtlebot3_bringup)/launch/turtlebot3_remote.launch" />
+
+  <!-- Octomap Color Server -->
+  <node pkg="octomap_server" type="octomap_dynamic_server_node" name="octomap_dynamic_server">
+    <param name="resolution" value="0.05" />
+    <param name="frame_id" type="string" value="odom" />
+    <param name="sensor_model/max_range" value="5.0" />
+    <!-- data source to integrate (PointCloud2) -->
+    <remap from="cloud_in" to="/camera/depth/points" />
+    <!-- <remap from="cloud_in" to="/point_cloud2" /> -->
+    <!-- <remap from="cloud_in" to="/euclidean_point_cloud2" /> -->
+  </node>
+
+  <!-- Load rviz with color octomap settings -->
+  <node pkg="rviz" type="rviz" name="rviz_name" args="-d $(find demonstrations)/rviz/dynamic_octomap_rviz.rviz" />
+
+
+
+</launch>
