@@ -63,6 +63,15 @@ namespace octomap {
     return n;
   }
 
+  float DynamicOcTree::getNodeDynamicity(const OcTreeKey& key) {
+    DynamicOcTreeNode* n = search(key);
+    float mdynamicity = 0;
+    if (n != 0) {
+      mdynamicity = n->getDynamicity();
+    }
+    return mdynamicity;
+  }
+
   bool DynamicOcTree::pruneNode(DynamicOcTreeNode* node) {
     if (!isNodeCollapsible(node))
       return false;

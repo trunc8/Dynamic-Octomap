@@ -85,6 +85,17 @@ namespace octomap {
       return setNodeDynamicity(key,d);
     }
 
+    // set node dynamicity at given key or coordinate. Replaces previous dynamicity.
+    float getNodeDynamicity(const OcTreeKey& key);
+
+    float getNodeDynamicity(float x, float y, 
+                                 float z) {
+      OcTreeKey key;
+      if (!this->coordToKeyChecked(point3d(x,y,z), key)) return -1;
+      return getNodeDynamicity(key);
+    }
+
+    // dummy function, no use for now
     // increment dynamicity measurement at given key or coordinate
     DynamicOcTreeNode* incrementNodeDynamicity(const OcTreeKey& key, float d);
     
